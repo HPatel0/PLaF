@@ -1,3 +1,6 @@
+(*Hari Patel*)
+(*I pledge my honor that I have abided by the Stevens Honor System*)
+
 open Parser_plaf.Ast
 open Parser_plaf.Parser
 open Ds
@@ -63,26 +66,73 @@ let rec eval_expr : expr -> exp_val ea_result = fun e ->
     eval_expr e1  >>=
     int_of_numVal >>= fun n ->
     return @@ NumVal (abs n)
-  | Record(fs) ->
-    failwith "implement me"
-  | Proj(e,id) ->
-    failwith "implement me"
+
+  | Record(fs) -> (*DONE*)
+    sequence (List.map (fun (id, e) ->
+      eval_expr e >>= fun ev ->
+      return (id, ev)) fs) >>= fun fields ->
+    let check_duplicates l =
+      let rec helper = function
+        | [] -> false
+        | x::xs -> List.mem x xs || helper xs
+      in
+      helper l
+    in
+    if check_duplicates (List.map fst fields)
+    then error "Record: duplicate field names"
+    else return @@ RecordVal fields
+
+
+  | Proj(e,id) -> (*DONE*)
+    eval_expr e >>=
+    fields_of_recordVal >>= fun fs ->
+    (match List.assoc_opt id fs with
+    | None -> error "Proj : field does not exist"
+    | Some ev -> return ev)
+
   | Cons(e1, e2) ->
     failwith "implement me"
   | Hd(e1) ->
     failwith "implement me"
   | Tl(e1) ->
     failwith "implement me"
-  | IsEmpty(e1)  ->
-    failwith "implement me"
+
+  | IsEmpty(e1)  -> (*DONE*)
+    eval_expr e1 >>=
+    list_of_listVal >>= fun n ->
+    if is_listVal @@ ListVal(n) 
+    then (
+      if (n = [])
+      then return @@ BoolVal true 
+      else return @@ BoolVal false
+    )
+    else return (BoolVal (n=[]))
+
   | EmptyList    ->
-    failwith "implement me"
-  | EmptyTree ->
-    failwith "implement me"
-  | Node(e1,lte,rte) ->
-    failwith "implement me"
-  | CaseT(target,emptycase,id1,id2,id3,nodecase) ->
-    failwith "implement me"
+    failwith "implement me" 
+
+  | EmptyTree -> (*DONE*)
+    return @@ TreeVal(Empty)
+
+  | Node(e1,lte,rte) -> (*DONE*)
+    eval_expr e1 >>= fun x ->
+    eval_expr lte >>=
+    tree_of_treeVal >>= fun left ->
+    eval_expr rte >>=
+    tree_of_treeVal >>= fun right ->
+    return (TreeVal(Node(x,left,right)))
+
+  | CaseT(target,emptycase,id1,id2,id3,nodecase) -> (*DONE*)
+    eval_expr target >>= 
+    tree_of_treeVal >>= fun x ->
+    (match x with
+    | Empty -> eval_expr emptycase
+    | Node(data, left, right) -> 
+      extend_env id1 data >>+
+      extend_env id2 (TreeVal left) >>+
+      extend_env id3 (TreeVal right) >>+
+      eval_expr nodecase)
+
   | Tuple(es) ->
     failwith "implement me"
   | Untuple(ids,e1,e2) ->
